@@ -280,10 +280,11 @@ export function extendSchemaImpl(
             ...config.interfaces(),
             ...buildInterfaces(extensions),
           ],
-          fields: () => ({
-            ...config.fields(),
-            ...buildFieldMap(extensions),
-          }),
+          fields: () => {
+            const existingFields = config.fields();
+            const extensionFields = buildFieldMap(extensions);
+            return mergeFieldMaps(existingFields, extensionFields);
+          },
           extensionASTNodes: config.extensionASTNodes.concat(extensions),
         };
       },
@@ -295,10 +296,11 @@ export function extendSchemaImpl(
             ...config.interfaces(),
             ...buildInterfaces(extensions),
           ],
-          fields: () => ({
-            ...config.fields(),
-            ...buildFieldMap(extensions),
-          }),
+          fields: () => {
+            const existingFields = config.fields();
+            const extensionFields = buildFieldMap(extensions);
+            return mergeFieldMaps(existingFields, extensionFields);
+          },
           extensionASTNodes: config.extensionASTNodes.concat(extensions),
         };
       },
@@ -379,7 +381,8 @@ export function extendSchemaImpl(
         const nodeFields = node.fields ?? [];
 
         for (const field of nodeFields) {
-          fieldConfigMap[field.name.value] = {
+          const fieldName = field.name.value;
+          const newFieldConfig = {
             // Note: While this could make assertions to get the correctly typed
             // value, that would throw immediately while type system validation
             // with validateSchema() will produce more actionable results.
@@ -389,9 +392,54 @@ export function extendSchemaImpl(
             deprecationReason: getDeprecationReason(field),
             astNode: field,
           };
+
+          if (fieldConfigMap[fieldName] != null) {
+            fieldConfigMap[fieldName] = mergeFieldConfigs(
+              fieldConfigMap[fieldName],
+              newFieldConfig,
+            );
+          } else {
+            fieldConfigMap[fieldName] = newFieldConfig;
+          }
         }
       }
       return fieldConfigMap;
+    }
+
+    function mergeFieldConfigs(existing: any, incoming: any): any {
+      return {
+        type: incoming.type ?? existing.type,
+        description: incoming.description ?? existing.description,
+        args: {
+          ...existing.args,
+          ...incoming.args,
+        },
+        deprecationReason:
+          incoming.deprecationReason ?? existing.deprecationReason,
+        astNodes: [existing.astNode, incoming.astNode].filter(Boolean),
+      };
+    }
+
+    function mergeFieldMaps(
+      existingFields: GraphQLFieldNormalizedConfigMap<unknown, unknown>,
+      extensionFields: GraphQLFieldNormalizedConfigMap<unknown, unknown>,
+    ): GraphQLFieldNormalizedConfigMap<unknown, unknown> {
+      const mergedFields = { ...existingFields };
+
+      for (const [fieldName, extensionField] of Object.entries(
+        extensionFields,
+      )) {
+        if (mergedFields[fieldName] != null) {
+          mergedFields[fieldName] = mergeFieldConfigs(
+            mergedFields[fieldName],
+            extensionField,
+          );
+        } else {
+          mergedFields[fieldName] = extensionField;
+        }
+      }
+
+      return mergedFields;
     }
 
     function buildArgumentMap(
