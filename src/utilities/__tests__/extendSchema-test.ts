@@ -1345,7 +1345,7 @@ describe('extendSchema', () => {
   });
 
   describe('field merging', () => {
-    it('merges field types when extending with same field name', () => {
+    it('merges field properties when extending with same field name', () => {
       const schema = buildSchema(`
         type Query {
           test: Test
@@ -1359,7 +1359,7 @@ describe('extendSchema', () => {
 
       const extendAST = parse(`
         extend type Test {
-          id: String @deprecated(reason: "Use stringId instead")
+          id: ID @deprecated(reason: "Use stringId instead")
           email: String
         }
       `);
@@ -1370,7 +1370,7 @@ describe('extendSchema', () => {
       const testType = assertObjectType(extendedSchema.getType('Test'));
       const fields = testType.getFields();
 
-      expect(fields.id.type.toString()).to.equal('String');
+      expect(fields.id.type.toString()).to.equal('ID');
       expect(fields.id.deprecationReason).to.equal('Use stringId instead');
 
       expect(fields.name.type.toString()).to.equal('String');
@@ -1381,7 +1381,7 @@ describe('extendSchema', () => {
 
       expectSchemaChanges(schema, extendedSchema).to.equal(dedent`
         type Test {
-          id: String @deprecated(reason: "Use stringId instead")
+          id: ID @deprecated(reason: "Use stringId instead")
           name: String
           email: String
         }
@@ -1556,22 +1556,20 @@ describe('extendSchema', () => {
       `);
     });
 
-    it('allows overriding field properties with extensions', () => {
+    it('allows adding field properties with extensions', () => {
       const schema = buildSchema(`
         type Query {
           test: Test
         }
 
         type Test {
-          """Original description"""
           field: String
         }
       `);
 
       const extendAST = parse(`
         extend type Test {
-          """New description"""
-          field: Int @deprecated(reason: "Field changed")
+          field: String @deprecated(reason: "Field changed")
         }
       `);
 
@@ -1581,14 +1579,13 @@ describe('extendSchema', () => {
       const testType = assertObjectType(extendedSchema.getType('Test'));
       const field = testType.getFields().field;
 
-      expect(field.type.toString()).to.equal('Int');
-      expect(field.description).to.equal('New description');
+      expect(field.type.toString()).to.equal('String');
+      expect(field.description).to.equal(undefined);
       expect(field.deprecationReason).to.equal('Field changed');
 
       expectSchemaChanges(schema, extendedSchema).to.equal(dedent`
         type Test {
-          """New description"""
-          field: Int @deprecated(reason: "Field changed")
+          field: String @deprecated(reason: "Field changed")
         }
       `);
     });
@@ -1607,7 +1604,7 @@ describe('extendSchema', () => {
 
       const extendAST = parse(`
         extend interface Test {
-          id: String @deprecated(reason: "Use stringId")
+          id: ID @deprecated(reason: "Use stringId")
           email: String
         }
       `);
@@ -1618,14 +1615,14 @@ describe('extendSchema', () => {
       const testInterface = assertInterfaceType(extendedSchema.getType('Test'));
       const fields = testInterface.getFields();
 
-      expect(fields.id.type.toString()).to.equal('String');
+      expect(fields.id.type.toString()).to.equal('ID');
       expect(fields.id.deprecationReason).to.equal('Use stringId');
       expect(fields.name.type.toString()).to.equal('String');
       expect(fields.email.type.toString()).to.equal('String');
 
       expectSchemaChanges(schema, extendedSchema).to.equal(dedent`
         interface Test {
-          id: String @deprecated(reason: "Use stringId")
+          id: ID @deprecated(reason: "Use stringId")
           name: String
           email: String
         }
@@ -1710,6 +1707,44 @@ describe('extendSchema', () => {
           age: Int
           fullName: String
         }
+      `);
+    });
+
+    it('covers field merging within buildFieldMap when same field appears in multiple extensions', () => {
+      // This test specifically targets the if branch in buildFieldMap
+      // when fieldConfigMap[fieldName] != null (same field in multiple extensions)
+      const schema = buildSchema(`
+          type Query {
+            existingField: String
+          }
+        `);
+
+      const extendAST = parse(`
+          extend type Query {
+            newField: String
+          }
+
+          extend type Query {
+            newField: String @deprecated(reason: "Use something else")
+          }
+        `);
+
+      // Use assumeValidSDL to bypass validation and test the internal merging logic
+      const extendedSchema = extendSchema(schema, extendAST, {
+        assumeValidSDL: true,
+      });
+
+      const queryType = extendedSchema.getType('Query');
+      assert(queryType != null);
+      const fields = (queryType as any).getFields();
+      expect(fields.newField.type.toString()).to.equal('String');
+      expect(fields.newField.deprecationReason).to.equal('Use something else');
+
+      expectSchemaChanges(schema, extendedSchema).to.equal(dedent`
+          type Query {
+            existingField: String
+            newField: String @deprecated(reason: "Use something else")
+          }
       `);
     });
   });

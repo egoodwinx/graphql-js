@@ -110,6 +110,7 @@ export { UniqueFieldDefinitionNamesRule } from './rules/UniqueFieldDefinitionNam
 export { UniqueArgumentDefinitionNamesRule } from './rules/UniqueArgumentDefinitionNamesRule.js';
 export { UniqueDirectiveNamesRule } from './rules/UniqueDirectiveNamesRule.js';
 export { PossibleTypeExtensionsRule } from './rules/PossibleTypeExtensionsRule.js';
+export { ExtendedFieldsMatchOriginalTypeRule } from './rules/ExtendedFieldsMatchOriginalTypeRule.js';
 
 // Optional rules not defined by the GraphQL Specification
 export { NoDeprecatedCustomRule } from './rules/custom/NoDeprecatedCustomRule.js';
